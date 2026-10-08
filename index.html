@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>British Male Audio Dialogue Synthesizer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        .active-line {
+            border-left-color: #2563eb;
+            background-color: #eff6ff;
+        }
+    </style>
+</head>
+<body class="bg-slate-50 min-h-screen text-slate-800 font-sans">
+    <div class="max-w-4xl mx-auto p-6 my-8 bg-white rounded-xl shadow-md border border-slate-200">
+        <!-- Header -->
+        <div class="border-b border-slate-200 pb-4 mb-6 flex justify-between items-center flex-wrap gap-4">
+            <div>
+                <h1 class="text-2xl font-bold text-slate-900 flex items-center gap-2">
+                    <i class="fa-solid fa-volume-high text-blue-600"></i>
+                     Abyssinia Tours Dialogue Player
+                </h1>
+                <p class="text-sm text-slate-500 mt-1">
+                    Interactive Text-to-Speech reader configured for British Male accents.
+                </p>
+            </div>
+            <div class="flex gap-2">
+                <button id="playBtn" onclick="playAll()" class="bg-blue-600 hover:bg-blue-700 text-white font-medium px-4 py-2 rounded-lg transition flex items-center gap-2">
+                    <i class="fa-solid fa-play"></i> Play All
+                </button>
+                <button id="stopBtn" onclick="stopAudio()" class="bg-rose-600 hover:bg-rose-700 text-white font-medium px-4 py-2 rounded-lg transition flex items-center gap-2">
+                    <i class="fa-solid fa-stop"></i> Stop
+                </button>
+            </div>
+        </div>
+
+        <!-- Voice & Settings Panel -->
+        <div class="bg-slate-100 p-4 rounded-lg mb-6 border border-slate-200">
+            <h2 class="text-md font-semibold text-slate-700 mb-3 flex items-center gap-2">
+                <i class="fa-solid fa-sliders text-blue-500"></i> Voice & Accent Settings
+            </h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-xs font-medium text-slate-600 mb-1">Select British Voice (UK / en-GB)</label>
+                    <select id="voiceSelect" onchange="updateVoices()" class="w-full bg-white border border-slate-300 text-slate-700 text-sm rounded-lg p-2.5 focus:ring-blue-500 focus:border-blue-500">
+                        <option value="">Loading voices...</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-slate-600 mb-1">Playback Speed (Rate)</label>
+                    <input type="range" id="rateInput" min="0.7" max="1.3" step="0.05" value="0.95" class="w-full h-2 bg-slate-300 rounded-lg appearance-none cursor-pointer">
+                    <div class="flex justify-between text-xs text-slate-500 mt-1">
+                        <span>Slower (0.7x)</span>
+                        <span id="rateValue">0.95x</span>
+                        <span>Faster (1.3x)</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Script List -->
+        <div class="space-y-3" id="dialogueContainer">
+            <!-- Dynamic lines will be generated here -->
+        </div>
+
+        <!-- System Notice -->
+        <div class="mt-8 p-4 bg-amber-50 border border-amber-200 rounded-lg text-amber-800 text-xs flex items-start gap-3">
+            <i class="fa-solid fa-circle-info text-amber-600 text-base mt-0.5"></i>
+            <div>
+                <p class="font-semibold">Audio Output Note:</p>
+                <p>Browser Text-to-Speech leverages your device's installed voices. Ensure standard British English (en-GB) voices are installed on your OS for best results. You can record your tab's audio using software like Audacity or browser audio-recording extensions to download as an MP3 audio file.</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const scriptData = [
+            { id: 0, speaker: "Tour Guide", text: "Good morning, everyone! Welcome to Ethiopia!", pitch: 1.0 },
+            { id: 1, speaker: "Mr. Coleman", text: "Good morning! It's wonderful to finally be here.", pitch: 0.85 },
+            { id: 2, speaker: "Tour Guide", text: "How was the flight, Sir? How are you this evening, Ms. Karen?", pitch: 1.0 },
+            { id: 3, speaker: "Mr. Coleman", text: "The flight was smooth, thank you. We're very excited for the tour.", pitch: 0.85 },
+            { id: 4, speaker: "Ms. Karen", text: "I'm doing well, thank you! Just a bit tired from the trip.", pitch: 1.15 },
+            { id: 5, speaker: "Tour Guide", text: "Can I help you with the luggage, Mr. John? Please, get into the bus and watch your steps as you board. Mind your head!", pitch: 1.0 },
+            { id: 6, speaker: "Mr. John", text: "Thank you, that would be great. The steps are quite steep!", pitch: 0.75 },
+            { id: 7, speaker: "Tour Guide", text: "Is everyone in? Great! On behalf of Abyssinia Tours, please enjoy your holiday and have a nice vacation!", pitch: 1.0 },
+            { id: 8, speaker: "Tourists", text: "Thank you so much! We are looking forward to it.", pitch: 0.9 }
+        ];
+
+        let voices = [];
+        let synth = window.speechSynthesis;
+        let isPlaying = false;
+        let currentIndex = 0;
+
+        function populateVoices() {
+            voices = synth.getVoices();
+            const select = document.getElementById('voiceSelect');
+            select.innerHTML = '';
+
+            // Filter for English UK / British voices
+            const ukVoices = voices.filter(v => v.lang.includes('GB') || v.name.toLowerCase().includes('uk') || v.name.toLowerCase().includes('british') || v.lang.startsWith('en'));
+
+            if (ukVoices.length === 0) {
+                ukVoices.push(...voices);
+            }
+
+            ukVoices.forEach((voice) => {
+                const option = document.createElement('option');
+                option.value = voice.name;
+                option.textContent = `${voice.name} (${voice.lang})`;
+                if (voice.lang === 'en-GB' || voice.name.toLowerCase().includes('uk male') || voice.name.toLowerCase().includes('george') || voice.name.toLowerCase().includes('oliver')) {
+                    option.selected = true;
+                }
+                select.appendChild(option);
+            });
+        }
+
+        function renderScript() {
+            const container = document.getElementById('dialogueContainer');
+            container.innerHTML = '';
+
+            scriptData.forEach((item, idx) => {
+                const card = document.createElement('div');
+                card.id = `line-${idx}`;
+                card.className = `p-4 border-l-4 border-slate-200 bg-white shadow-sm rounded-r-lg transition-all duration-200 flex justify-between items-center gap-4`;
+                
+                card.innerHTML = `
+                    <div class="flex-1">
+                        <div class="flex items-center gap-2 mb-1">
+                            <span class="text-xs font-bold uppercase tracking-wide text-blue-600 bg-blue-50 px-2 py-0.5 rounded">
+                                ${item.speaker}
+                            </span>
+                        </div>
+                        <p class="text-slate-800 text-sm md:text-base font-medium">"${item.text}"</p>
+                    </div>
+                    <button onclick="playSingleLine(${idx})" class="text-slate-400 hover:text-blue-600 p-2 rounded-full hover:bg-slate-100 transition" title="Play Line">
+                        <i class="fa-solid fa-circle-play text-xl"></i>
+                    </button>
+                `;
+                container.appendChild(card);
+            });
+        }
+
+        function getSelectedVoice() {
+            const selectedName = document.getElementById('voiceSelect').value;
+            return voices.find(v => v.name === selectedName) || voices[0];
+        }
+
+        function highlightLine(index) {
+            scriptData.forEach((_, idx) => {
+                const el = document.getElementById(`line-${idx}`);
+                if (el) {
+                    if (idx === index) {
+                        el.classList.add('active-line');
+                    } else {
+                        el.classList.remove('active-line');
+                    }
+                }
+            });
+        }
+
+        function speakLine(index, onEndCallback) {
+            if (index >= scriptData.length) {
+                stopAudio();
+                return;
+            }
+
+            highlightLine(index);
+            const line = scriptData[index];
+            const utterance = new SpeechSynthesisUtterance(line.text);
+            
+            utterance.voice = getSelectedVoice();
+            utterance.rate = parseFloat(document.getElementById('rateInput').value);
+            utterance.pitch = line.pitch; // Adjust pitch per character to create male voice distinction
+
+            utterance.onend = () => {
+                if (isPlaying && onEndCallback) {
+                    onEndCallback();
+                }
+            };
+
+            utterance.onerror = () => {
+                stopAudio();
+            };
+
+            synth.speak(utterance);
+        }
+
+        function playNext() {
+            if (!isPlaying) return;
+            if (currentIndex < scriptData.length) {
+                speakLine(currentIndex, () => {
+                    currentIndex++;
+                    playNext();
+                });
+            } else {
+                stopAudio();
+            }
+        }
+
+        function playAll() {
+            stopAudio();
+            isPlaying = true;
+            currentIndex = 0;
+            document.getElementById('playBtn').classList.add('opacity-50', 'pointer-events-none');
+            playNext();
+        }
+
+        function playSingleLine(index) {
+            stopAudio();
+            speakLine(index, null);
+        }
+
+        function stopAudio() {
+            isPlaying = false;
+            synth.cancel();
+            highlightLine(-1);
+            document.getElementById('playBtn').classList.remove('opacity-50', 'pointer-events-none');
+        }
+
+        document.getElementById('rateInput').addEventListener('input', (e) => {
+            document.getElementById('rateValue').textContent = `${e.target.value}x`;
+        });
+
+        if (speechSynthesis.onvoiceschanged !== undefined) {
+            speechSynthesis.onvoiceschanged = populateVoices;
+        }
+
+        window.onload = () => {
+            populateVoices();
+            renderScript();
+        };
+    </script>
+</body>
+</html>
